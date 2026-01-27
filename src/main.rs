@@ -62,7 +62,16 @@ fn main() -> Result<()> {
     if let Some(ref cmd) = app.app_to_launch {
         if print_only {
             // Just print the command to stdout - useful for those who wish to pipe to swayexec or similar
-            println!("{}", cmd);
+            // Check if app needs terminal
+            if let Some(entry) = app.apps.iter().find(|a| &a.exec == cmd) {
+                if entry.terminal || entry.needs_terminal() {
+                    println!("{} {}", app.config.terminal, cmd);
+                } else {
+                    println!("{}", cmd);
+                }
+            } else {
+                println!("{}", cmd);
+            }
         } else {
             // directly launch
             if let Some(entry) = app.apps.iter().find(|a| &a.exec == cmd).cloned() {
