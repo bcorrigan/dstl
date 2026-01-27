@@ -41,30 +41,66 @@ fn main() -> Result<()> {
         config::StartMode::Single => Mode::SinglePane,
     };
 
+    let mut app = App::new(single_pane_mode, start_mode, &cfg);
+    
+    // Check for print flag
+    let print_only = std::env::args().any(|arg| arg == "--print-selection");
+
     enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    
+
+    let res = if print_only {
+        run_with_writer(io::stderr(), &mut app, &cfg)
+    } else {
+        run_with_writer(io::stdout(), &mut app, &cfg)
+    };
+
+    disable_raw_mode()?;
+
+    if let Err(err) = res {
+        eprintln!("Error: {err:?}");
+    }
+
+    if let Some(ref cmd) = app.app_to_launch {
+        if print_only {
+            // Just print the command to stdout
+            println!("{}", cmd);
+        } else {
+            // Normal launch
+            if let Some(entry) = app.apps.iter().find(|a| &a.exec == cmd).cloned() {
+                app.add_to_recent(entry.name.clone());
+                crate::launch::launch_app(&entry, &app.config);
+            } else {
+                let _ = std::process::Command::new("sh").arg("-c").arg(cmd).spawn();
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn run_with_writer<W: Write + ExecutableCommand>(
+    mut writer: W,
+    app: &mut App,
+    cfg: &config::DstlConfig,
+) -> Result<()> {
     // Set cursor color using ANSI escape codes
-    set_cursor_color(&mut stdout, &cfg.colors.cursor_color)?;
+    set_cursor_color(&mut writer, &cfg.colors.cursor_color)?;
     
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
+    execute!(writer, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(writer);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new(single_pane_mode, start_mode, &cfg);
+    warmup_icons(&mut terminal, app, cfg)?;
 
-    warmup_icons(&mut terminal, &app, &cfg)?;
-
-    if start_mode == Mode::DualPane && !app.categories.is_empty() {
+    if app.mode == Mode::DualPane && !app.categories.is_empty() {
         let old_focus = app.focus;
         app.focus = Focus::Categories;
-        terminal.draw(|f| ui::draw(f, &mut app, cfg.search_position.clone(), &cfg))?;
+        terminal.draw(|f| ui::draw(f, app, cfg.search_position.clone(), cfg))?;
         app.focus = old_focus;
     }
 
-    let res = run_app(&mut terminal, &mut app, &cfg);
+    let res = run_app(&mut terminal, app, cfg);
 
-    disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
         LeaveAlternateScreen,
@@ -75,20 +111,7 @@ fn main() -> Result<()> {
     // Reset cursor color to default
     reset_cursor_color(terminal.backend_mut())?;
 
-    if let Err(err) = res {
-        eprintln!("Error: {err:?}");
-    }
-
-    if let Some(ref cmd) = app.app_to_launch {
-        if let Some(entry) = app.apps.iter().find(|a| &a.exec == cmd).cloned() {
-            app.add_to_recent(entry.name.clone());
-            crate::launch::launch_app(&entry, &app.config);
-        } else {
-            let _ = std::process::Command::new("sh").arg("-c").arg(cmd).spawn();
-        }
-    }
-
-    Ok(())
+    res
 }
 
 /// Set the cursor color using ANSI escape codes
