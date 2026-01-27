@@ -5,25 +5,25 @@ mod icons;
 mod launch;
 mod ui;
 
+use crossterm::{
+    ExecutableCommand,
+    cursor::{MoveTo, SetCursorStyle},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event},
+    execute,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+};
+use eyre::Result;
 use ratatui::{
-    backend::{Backend, CrosstermBackend},
     Terminal,
+    backend::{Backend, CrosstermBackend},
 };
 use std::{
     io::{self, Write},
     time::{Duration, Instant},
 };
-use crossterm::{
-    cursor::{MoveTo, SetCursorStyle},
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-    ExecutableCommand,
-};
-use eyre::Result;
 
 use app::{App, Focus, Mode, SinglePaneMode};
-use config::{load_launcher_config, CursorShape, SearchPosition};
+use config::{CursorShape, SearchPosition, load_launcher_config};
 
 fn main() -> Result<()> {
     color_eyre::install()?;
@@ -42,8 +42,7 @@ fn main() -> Result<()> {
     };
 
     let mut app = App::new(single_pane_mode, start_mode, &cfg);
-    
-    // Check for print flag
+
     let print_only = std::env::args().any(|arg| arg == "--print-selection");
 
     enable_raw_mode()?;
@@ -62,10 +61,10 @@ fn main() -> Result<()> {
 
     if let Some(ref cmd) = app.app_to_launch {
         if print_only {
-            // Just print the command to stdout
+            // Just print the command to stdout - useful for those who wish to pipe to swayexec or similar
             println!("{}", cmd);
         } else {
-            // Normal launch
+            // directly launch
             if let Some(entry) = app.apps.iter().find(|a| &a.exec == cmd).cloned() {
                 app.add_to_recent(entry.name.clone());
                 crate::launch::launch_app(&entry, &app.config);
@@ -83,9 +82,8 @@ fn run_with_writer<W: Write + ExecutableCommand>(
     app: &mut App,
     cfg: &config::DstlConfig,
 ) -> Result<()> {
-    // Set cursor color using ANSI escape codes
     set_cursor_color(&mut writer, &cfg.colors.cursor_color)?;
-    
+
     execute!(writer, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(writer);
     let mut terminal = Terminal::new(backend)?;
@@ -107,7 +105,7 @@ fn run_with_writer<W: Write + ExecutableCommand>(
         DisableMouseCapture
     )?;
     terminal.show_cursor()?;
-    
+
     // Reset cursor color to default
     reset_cursor_color(terminal.backend_mut())?;
 
@@ -135,13 +133,13 @@ fn reset_cursor_color<W: Write>(writer: &mut W) -> Result<()> {
 /// Parse hex color string to RGB values
 fn parse_hex_color(color: &str) -> Option<(u8, u8, u8)> {
     let color = color.trim();
-    
+
     if !color.starts_with('#') {
         return None;
     }
-    
+
     let hex = &color[1..];
-    
+
     match hex.len() {
         // #RGB format
         3 => {
@@ -185,7 +183,9 @@ fn run_app<B: Backend + ExecutableCommand>(
             let full_area = frame.area();
 
             let search_area = match cfg.search_position {
-                SearchPosition::Top => ratatui::layout::Rect::new(full_area.x, full_area.y, full_area.width, 3),
+                SearchPosition::Top => {
+                    ratatui::layout::Rect::new(full_area.x, full_area.y, full_area.width, 3)
+                }
                 SearchPosition::Bottom => ratatui::layout::Rect::new(
                     full_area.x,
                     full_area.height.saturating_sub(3),
@@ -197,7 +197,7 @@ fn run_app<B: Backend + ExecutableCommand>(
             // Calculate scroll offset to match the Paragraph widget
             let padding_left = 1;
 
-            let available_width = search_area.width.saturating_sub(2 + 2) as usize; 
+            let available_width = search_area.width.saturating_sub(2 + 2) as usize;
             // borders + 2 padding
 
             let horizontal_offset = if app.cursor_position >= available_width {
@@ -213,7 +213,7 @@ fn run_app<B: Backend + ExecutableCommand>(
             let cursor_y = search_area.y + 1;
 
             let backend = terminal.backend_mut();
-            
+
             // Move cursor
             backend.execute(MoveTo(cursor_x, cursor_y))?;
 
@@ -245,7 +245,6 @@ fn run_app<B: Backend + ExecutableCommand>(
             } else {
                 terminal.show_cursor()?;
             }
-
         } else {
             terminal.hide_cursor()?;
         }
