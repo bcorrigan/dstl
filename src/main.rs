@@ -8,6 +8,7 @@ mod ui;
 
 use crossterm::{
     ExecutableCommand,
+    cursor::SetCursorStyle,
     event::{self, DisableMouseCapture, EnableMouseCapture, Event},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
@@ -224,8 +225,6 @@ fn parse_hex_color(color: &str) -> Option<(u8, u8, u8)> {
     }
 }
 
-use ratatui::style::{Style, Modifier, Color};
-
 fn run_app<B: Backend + ExecutableCommand>(
     terminal: &mut Terminal<B>,
     app: &mut App,
@@ -236,32 +235,41 @@ fn run_app<B: Backend + ExecutableCommand>(
     loop {
         app.update_cursor_blink();
 
-        // Update text_area cursor style
-        let cursor_color = config::LauncherTheme::parse_color(&cfg.colors.cursor_color);
-        
-        let cursor_style = match cfg.colors.cursor_shape {
-             CursorShape::Underline => {
-                 Style::default().fg(cursor_color).add_modifier(Modifier::UNDERLINED)
-             }
-             CursorShape::Block => {
-                  Style::default().bg(cursor_color).fg(Color::Black)
-             }
-             CursorShape::Pipe => {
-                  // Text area doesn't support pipe cursor easily, fallback to block or similar
-                  Style::default().bg(cursor_color).fg(Color::Black)
-             }
-        };
-
-        if app.cursor_visible && app.focus == Focus::Search {
-            app.text_area.set_cursor_style(cursor_style);
-        } else {
-            app.text_area.set_cursor_style(Style::default()); // Hidden
-        }
-
         terminal.draw(|f| ui::draw(f, app, cfg.search_position.clone(), cfg))?;
-        
-        // Always hide hardware cursor as we use tui-textarea's visual cursor
-        terminal.hide_cursor()?;
+
+        if app.focus == Focus::Search {
+            // Set shape based on blink interval
+            let style = if cfg.colors.cursor_blink_interval > 0 {
+                // Use steady cursor - we'll handle blinking manually
+                match cfg.colors.cursor_shape {
+                    CursorShape::Block => SetCursorStyle::SteadyBlock,
+                    CursorShape::Underline => SetCursorStyle::SteadyUnderScore,
+                    CursorShape::Pipe => SetCursorStyle::SteadyBar,
+                }
+            } else {
+                // Use terminal's built-in blinking
+                match cfg.colors.cursor_shape {
+                    CursorShape::Block => SetCursorStyle::BlinkingBlock,
+                    CursorShape::Underline => SetCursorStyle::BlinkingUnderScore,
+                    CursorShape::Pipe => SetCursorStyle::BlinkingBar,
+                }
+            };
+            
+            terminal.backend_mut().execute(style)?;
+
+            // Handle manual cursor blinking if interval is set
+            if cfg.colors.cursor_blink_interval > 0 {
+                if app.cursor_visible {
+                    terminal.show_cursor()?;
+                } else {
+                    terminal.hide_cursor()?;
+                }
+            } else {
+                terminal.show_cursor()?;
+            }
+        } else {
+            terminal.hide_cursor()?;
+        }
 
         let tick = Duration::from_millis(50);
 

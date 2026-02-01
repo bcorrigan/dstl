@@ -6,11 +6,11 @@ use ratatui::Frame;
 pub fn draw(f: &mut Frame, app: &mut App, search_position: SearchPosition, config: &DstlConfig) {
     let (search_area, content_area) = layout::vertical_split(f, 3, search_position);
     
-    // Pass text_area to render_search_bar
+    // Pass input to render_search_bar
     layout::render_search_bar(
         f,
         search_area,
-        &mut app.text_area,
+        &app.input,
         app.focus,
         config,
     );

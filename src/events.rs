@@ -1,16 +1,16 @@
-use crossterm::event::KeyEvent;
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use crate::app::{App, Focus, Mode};
 use crate::config::SearchPosition;
 use eyre::Result;
+use tui_input::backend::crossterm::EventHandler;
+use tui_input::InputRequest;
 
 pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
-    use crossterm::event::KeyCode::*;
-
     // Global keys
     match key.code {
-        Esc => return Ok(true),
-        Char('q') if app.focus != Focus::Search => return Ok(true),
-        Char('m') if app.focus != Focus::Search => {
+        KeyCode::Esc => return Ok(true),
+        KeyCode::Char('q') if app.focus != Focus::Search => return Ok(true),
+        KeyCode::Char('m') if app.focus != Focus::Search => {
             app.toggle_mode();
             if app.config.focus_search_on_switch {
                 app.focus = Focus::Search;
@@ -22,57 +22,120 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
 
     // Search focus handling
     if app.focus == Focus::Search {
+        // Navigation / Action keys that override typing
         match key.code {
-            Enter => {
+            KeyCode::Enter => {
                 if let Some(app_entry) = get_selected_app(app) {
                     app.app_to_launch = Some(app_entry.exec.clone());
                     app.should_quit = true;
                     return Ok(true);
                 }
             }
-            Tab => {
+            KeyCode::Tab => {
                  app.focus = match app.mode {
                     Mode::SinglePane => Focus::Apps,
                     Mode::DualPane => Focus::Categories,
                 };
+                return Ok(false);
             }
-            Up | Char('k') => {
-                 // Allow Up from search to go to list only if search is at bottom
-                if app.config.search_position == SearchPosition::Bottom {
-                    app.focus = match app.mode {
-                        Mode::SinglePane => Focus::Apps,
-                        Mode::DualPane => Focus::Apps, // or Categories depending on logic? Original said Apps
-                    };
-                } else {
-                     // Pass to textarea (could be history navigation if configured, or nothing)
-                     app.text_area.input(key);
+            KeyCode::Up | KeyCode::Char('k') if key.modifiers.is_empty() || key.modifiers == KeyModifiers::CONTROL => {
+                // If Ctrl+K, it might be "Delete to end" for readline. 
+                // But traditionally Up/Ctrl+K in this app was navigation.
+                // User asked for readline style. Ctrl+K should be delete to end line.
+                // Up is navigation.
+                
+                if key.code == KeyCode::Up {
+                    // Allow Up from search to go to list only if search is at bottom
+                    if app.config.search_position == SearchPosition::Bottom {
+                        app.focus = match app.mode {
+                            Mode::SinglePane => Focus::Apps,
+                            Mode::DualPane => Focus::Apps, 
+                        };
+                        return Ok(false);
+                    }
                 }
             }
-            Down | Char('j') => {
-                 // Allow Down from search to go to list only if search is at top
-                if app.config.search_position == SearchPosition::Top {
-                    app.focus = match app.mode {
-                        Mode::SinglePane => Focus::Apps,
-                        Mode::DualPane => Focus::Categories,
-                    };
-                } else {
-                     app.text_area.input(key);
-                }
+            KeyCode::Down | KeyCode::Char('j') if key.modifiers.is_empty() => {
+                 if key.code == KeyCode::Down {
+                     // Allow Down from search to go to list only if search is at top
+                    if app.config.search_position == SearchPosition::Top {
+                        app.focus = match app.mode {
+                            Mode::SinglePane => Focus::Apps,
+                            Mode::DualPane => Focus::Categories,
+                        };
+                        return Ok(false);
+                    }
+                 }
+                 // 'j' types 'j'.
             }
-            _ => {
-                // Pass everything else to text area
-                if app.text_area.input(key) {
-                    app.reset_cursor_blink();
-                    update_selection_after_search(app);
-                }
+            _ => {}
+        }
+
+        // Emacs / Readline bindings & Typing
+        // We match explicitly for control keys
+        
+        // Manual handling for missing InputRequest variants
+        if key.modifiers == KeyModifiers::CONTROL {
+            match key.code {
+                 KeyCode::Char('u') => {
+                     // Delete to start
+                     let cursor = app.input.cursor();
+                     let val = app.input.value();
+                     if cursor > 0 && cursor <= val.len() {
+                         let suffix = &val[cursor..];
+                         let mut new_input = tui_input::Input::new(suffix.to_string());
+                         new_input.handle(InputRequest::GoToStart);
+                         app.input = new_input;
+                         update_selection_after_search(app);
+                     }
+                     return Ok(false);
+                 }
+                 KeyCode::Char('k') => {
+                     // Delete to end
+                     let cursor = app.input.cursor();
+                     let val = app.input.value();
+                     if cursor < val.len() {
+                         let prefix = &val[..cursor];
+                         app.input = tui_input::Input::new(prefix.to_string());
+                         update_selection_after_search(app);
+                     }
+                     return Ok(false);
+                 }
+                 _ => {}
             }
         }
+
+        let req = match key {
+            KeyEvent { code: KeyCode::Char('a'), modifiers: KeyModifiers::CONTROL, .. } => Some(InputRequest::GoToStart),
+            KeyEvent { code: KeyCode::Char('e'), modifiers: KeyModifiers::CONTROL, .. } => Some(InputRequest::GoToEnd),
+            KeyEvent { code: KeyCode::Char('b'), modifiers: KeyModifiers::CONTROL, .. } => Some(InputRequest::GoToPrevChar),
+            KeyEvent { code: KeyCode::Char('f'), modifiers: KeyModifiers::CONTROL, .. } => Some(InputRequest::GoToNextChar),
+            KeyEvent { code: KeyCode::Char('w'), modifiers: KeyModifiers::CONTROL, .. } => Some(InputRequest::DeletePrevWord),
+            // Ctrl+D -> DeleteNextChar (Delete)
+            KeyEvent { code: KeyCode::Char('d'), modifiers: KeyModifiers::CONTROL, .. } => Some(InputRequest::DeleteNextChar),
+            // Ctrl+H -> DeletePrevChar (Backspace)
+            KeyEvent { code: KeyCode::Char('h'), modifiers: KeyModifiers::CONTROL, .. } => Some(InputRequest::DeletePrevChar),
+            // Default handling for other keys (typing, backspace, etc.)
+            _ => None,
+        };
+
+        if let Some(req) = req {
+            app.input.handle(req);
+            app.reset_cursor_blink();
+            update_selection_after_search(app);
+        } else {
+             // Pass to default handler
+             app.input.handle_event(&Event::Key(key));
+             app.reset_cursor_blink();
+             update_selection_after_search(app);
+        }
+        
         return Ok(false);
     }
 
     // Navigation handling (when NOT in search)
     match key.code {
-        Enter => {
+        KeyCode::Enter => {
             if let Some(app_entry) = get_selected_app(app) {
                 app.app_to_launch = Some(app_entry.exec.clone());
                 app.should_quit = true;
@@ -80,12 +143,12 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
             }
         }
 
-        Tab => {
+        KeyCode::Tab => {
             app.focus = Focus::Search;
         }
 
         // Up/Down navigation
-        Up | Char('k') => {
+        KeyCode::Up | KeyCode::Char('k') => {
             // In list navigation
             match app.mode {
                 Mode::SinglePane => {
@@ -129,7 +192,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
             }
         }
 
-        Down | Char('j') => {
+        KeyCode::Down | KeyCode::Char('j') => {
             // In list navigation
             match app.mode {
                 Mode::SinglePane => {
@@ -176,7 +239,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
         }
 
         // h/l keys only work for list navigation when NOT in search
-        Char('h') => {
+        KeyCode::Char('h') => {
             match app.focus {
                 Focus::Apps => {
                     if app.mode == Mode::DualPane {
@@ -200,7 +263,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
             }
         }
 
-        Char('l') => {
+        KeyCode::Char('l') => {
             match app.focus {
                 Focus::Categories => {
                     if app.mode == Mode::DualPane {

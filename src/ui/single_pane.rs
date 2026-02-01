@@ -29,11 +29,11 @@ pub fn draw(
         config,
     );
     
-    // Pass text_area to render_search_bar
+    // Pass input to render_search_bar
     layout::render_search_bar(
         f,
         chunks.0,
-        &mut app.text_area,
+        &app.input,
         focus,
         config,
     );

@@ -4,7 +4,7 @@ use std::time::Instant;
 use crate::config::DstlConfig;
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
-use tui_textarea::TextArea;
+use tui_input::Input;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
@@ -29,7 +29,7 @@ pub struct App {
     pub mode: Mode,
     pub single_pane_mode: SinglePaneMode,
     pub should_quit: bool,
-    pub text_area: TextArea<'static>,
+    pub input: Input,
     pub cursor_visible: bool,
     pub cursor_last_toggle: std::time::Instant,
     pub categories: Vec<String>,
@@ -49,7 +49,7 @@ impl Clone for App {
             mode: self.mode,
             single_pane_mode: self.single_pane_mode,
             should_quit: self.should_quit,
-            text_area: self.text_area.clone(),
+            input: self.input.clone(),
             cursor_visible: true,
             cursor_last_toggle: Instant::now(),
             categories: self.categories.clone(),
@@ -71,7 +71,7 @@ impl std::fmt::Debug for App {
             .field("mode", &self.mode)
             .field("single_pane_mode", &self.single_pane_mode)
             .field("should_quit", &self.should_quit)
-            .field("text_area", &self.text_area)
+            .field("input", &self.input)
             .field("cursor_visible", &self.cursor_visible)
             .field("cursor_last_toggle", &self.cursor_last_toggle)
             .field("categories", &self.categories)
@@ -125,7 +125,7 @@ impl App {
             mode,
             single_pane_mode,
             should_quit: false,
-            text_area: TextArea::default(),
+            input: Input::default(),
             cursor_visible: true,
             cursor_last_toggle: Instant::now(),
             categories,
@@ -147,7 +147,7 @@ impl App {
 
     /// Helper to get the current search query
     pub fn query(&self) -> String {
-        self.text_area.lines().first().cloned().unwrap_or_default()
+        self.input.value().to_string()
     }
 
     /// Add an app to the recent list
