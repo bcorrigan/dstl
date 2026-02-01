@@ -3,7 +3,7 @@ use std::os::unix::process::CommandExt;
 use crate::app::AppEntry;
 use crate::config::DstlConfig;
 
-fn build_command(entry: &AppEntry, config: &DstlConfig) -> Command {
+pub fn build_command(entry: &AppEntry, config: &DstlConfig) -> Command {
     let terminal = &config.terminal;
 
     if entry.terminal || entry.needs_terminal() {

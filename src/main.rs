@@ -3,6 +3,7 @@ mod config;
 mod events;
 mod icons;
 mod launch;
+mod sway;
 mod ui;
 
 use crossterm::{
@@ -44,6 +45,21 @@ fn main() -> Result<()> {
     let mut app = App::new(single_pane_mode, start_mode, &cfg);
 
     let print_only = std::env::args().any(|arg| arg == "--print-selection");
+    let sway_mode = std::env::args().any(|arg| arg == "--sway");
+    
+    let mut sway_client = if sway_mode {
+        sway::Client::connect().ok()
+    } else {
+        None
+    };
+
+    let mut fullscreen_window_id = None;
+    if let Some(client) = &mut sway_client {
+        if let Ok(Some(id)) = client.get_focused_fullscreen_node_id() {
+            fullscreen_window_id = Some(id);
+            let _ = client.set_fullscreen(false, Some(id));
+        }
+    }
 
     enable_raw_mode()?;
 
@@ -74,11 +90,45 @@ fn main() -> Result<()> {
             }
         } else {
             // directly launch
-            if let Some(entry) = app.apps.iter().find(|a| &a.exec == cmd).cloned() {
-                app.add_to_recent(entry.name.clone());
-                crate::launch::launch_app(&entry, &app.config);
+            if sway_mode {
+                let full_cmd = if let Some(entry) = app.apps.iter().find(|a| &a.exec == cmd).cloned() {
+                    app.add_to_recent(entry.name.clone());
+                    let command = crate::launch::build_command(&entry, &app.config);
+                    // Simple reconstruction of command string for sway exec
+                    let prog = command.get_program().to_string_lossy();
+                    let args = command.get_args()
+                        .map(|a| {
+                            let s = a.to_string_lossy();
+                            if s.contains(' ') {
+                                format!("\"{}\"", s)
+                            } else {
+                                s.into_owned()
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    format!("{} {}", prog, args)
+                } else {
+                    cmd.clone()
+                };
+
+                if let Some(client) = &mut sway_client {
+                    let _ = client.exec(&full_cmd);
+                }
             } else {
-                let _ = std::process::Command::new("sh").arg("-c").arg(cmd).spawn();
+                if let Some(entry) = app.apps.iter().find(|a| &a.exec == cmd).cloned() {
+                    app.add_to_recent(entry.name.clone());
+                    crate::launch::launch_app(&entry, &app.config);
+                } else {
+                    let _ = std::process::Command::new("sh").arg("-c").arg(cmd).spawn();
+                }
+            }
+        }
+    } else {
+        // User cancelled
+        if let Some(id) = fullscreen_window_id {
+            if let Some(client) = &mut sway_client {
+                let _ = client.set_fullscreen(true, Some(id));
             }
         }
     }
