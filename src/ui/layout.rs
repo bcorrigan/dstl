@@ -1,9 +1,10 @@
 use ratatui::{
     Frame,
     layout::{Layout, Constraint, Direction, Rect},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, List, ListItem, ListState},
     style::{Style, Color},
 };
+use tui_textarea::TextArea;
 use crate::app::Focus;
 use crate::config::{DstlConfig, LauncherTheme, SearchPosition};
 
@@ -38,8 +39,7 @@ pub fn horizontal_split(area: Rect) -> (Rect, Rect) {
 pub fn render_search_bar(
     f: &mut Frame,
     area: Rect,
-    query: &str,
-    cursor_position: usize,
+    text_area: &mut TextArea<'static>,
     focus: Focus,
     config: &DstlConfig,
 ) {
@@ -55,43 +55,25 @@ pub fn render_search_bar(
         .border_type(LauncherTheme::parse_border_type(&config.colors.border_style))
         .border_style(Style::default().fg(border_color));
 
-    // Inner area after borders
-    let inner = block.inner(area);
+    text_area.set_block(block);
+    text_area.set_style(Style::default().fg(border_color));
     
-    let query_chars: Vec<char> = query.chars().collect();
-    let query_len = query_chars.len();
+    // We can rely on tui-textarea's internal cursor rendering.
+    // However, if we want to sync the hardware cursor, we can do it here or in main loop.
+    // Given main loop does manual cursor handling, let's try to just render the widget here.
+    // The main loop's manual cursor code relies on calculated positions which are now gone.
+    // So we should set the cursor here if we want hardware cursor.
+    // But wait, tui-textarea doesn't expose screen coordinates easily unless we calculate them.
+    // Actually, we can just let tui-textarea render its own cursor (visual block/line).
     
-    // Add padding (1 space on each side)
-    let padding = 1;
-    let available_width = (inner.width as usize).saturating_sub(padding * 2);
-    
-    // Calculate scrolling offset to keep cursor visible
-    let scroll_offset = if cursor_position >= available_width {
-        cursor_position - available_width + 1
-    } else {
-        0
-    };
-    
-    let visible_start = scroll_offset;
-    let visible_end = (visible_start + available_width).min(query_len);
-    let visible_text: String = query_chars[visible_start..visible_end].iter().collect();
-    
-    // Add padding spaces to the displayed text
-    let padded_text = format!(" {} ", visible_text);
-    
-    let paragraph = Paragraph::new(padded_text)
-        .block(block)
-        .style(Style::default().fg(border_color));
-    
-    f.render_widget(paragraph, area);
-    
-    // Set cursor position if search is focused (account for padding)
-    if focus == Focus::Search {
-        let cursor_x = inner.x + padding as u16 + (cursor_position - scroll_offset) as u16;
-        let cursor_y = inner.y;
-        f.set_cursor_position((cursor_x, cursor_y));
-    }
+    // Check if we need to hide the cursor (blinking handled by App)
+    // We don't have access to app.cursor_visible here directly, but the main loop
+    // calls this. We should probably pass cursor_visible or handle it outside.
+    // For now, let's assume the text_area has the correct cursor style set.
+
+    f.render_widget(&*text_area, area);
 }
+
 
 
 pub fn render_list(

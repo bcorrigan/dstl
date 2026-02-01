@@ -6,18 +6,17 @@ use ratatui::Frame;
 pub fn draw(f: &mut Frame, app: &mut App, search_position: SearchPosition, config: &DstlConfig) {
     let (search_area, content_area) = layout::vertical_split(f, 3, search_position);
     
-    // Pass cursor_position to render_search_bar
+    // Pass text_area to render_search_bar
     layout::render_search_bar(
         f,
         search_area,
-        &app.search_query,
-        app.cursor_position,
+        &mut app.text_area,
         app.focus,
         config,
     );
     
     let (categories_area, apps_area) = layout::horizontal_split(content_area);
-    let query_lower = app.search_query.to_lowercase();
+    let query_lower = app.query().to_lowercase();
     
     let (categories_to_show, category_indices): (Vec<String>, Vec<usize>) = if !query_lower.is_empty() {
         app.categories

@@ -8,7 +8,6 @@ mod ui;
 
 use crossterm::{
     ExecutableCommand,
-    cursor::{MoveTo, SetCursorStyle},
     event::{self, DisableMouseCapture, EnableMouseCapture, Event},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
@@ -24,7 +23,7 @@ use std::{
 };
 
 use app::{App, Focus, Mode, SinglePaneMode};
-use config::{CursorShape, SearchPosition, load_launcher_config};
+use config::{CursorShape, load_launcher_config};
 
 fn main() -> Result<()> {
     color_eyre::install()?;
@@ -225,6 +224,8 @@ fn parse_hex_color(color: &str) -> Option<(u8, u8, u8)> {
     }
 }
 
+use ratatui::style::{Style, Modifier, Color};
+
 fn run_app<B: Backend + ExecutableCommand>(
     terminal: &mut Terminal<B>,
     app: &mut App,
@@ -235,78 +236,32 @@ fn run_app<B: Backend + ExecutableCommand>(
     loop {
         app.update_cursor_blink();
 
-        terminal.draw(|f| ui::draw(f, app, cfg.search_position.clone(), cfg))?;
+        // Update text_area cursor style
+        let cursor_color = config::LauncherTheme::parse_color(&cfg.colors.cursor_color);
+        
+        let cursor_style = match cfg.colors.cursor_shape {
+             CursorShape::Underline => {
+                 Style::default().fg(cursor_color).add_modifier(Modifier::UNDERLINED)
+             }
+             CursorShape::Block => {
+                  Style::default().bg(cursor_color).fg(Color::Black)
+             }
+             CursorShape::Pipe => {
+                  // Text area doesn't support pipe cursor easily, fallback to block or similar
+                  Style::default().bg(cursor_color).fg(Color::Black)
+             }
+        };
 
-        if app.focus == Focus::Search {
-            let frame = terminal.get_frame();
-            let full_area = frame.area();
-
-            let search_area = match cfg.search_position {
-                SearchPosition::Top => {
-                    ratatui::layout::Rect::new(full_area.x, full_area.y, full_area.width, 3)
-                }
-                SearchPosition::Bottom => ratatui::layout::Rect::new(
-                    full_area.x,
-                    full_area.height.saturating_sub(3),
-                    full_area.width,
-                    3,
-                ),
-            };
-
-            // Calculate scroll offset to match the Paragraph widget
-            let padding_left = 1;
-
-            let available_width = search_area.width.saturating_sub(2 + 2) as usize;
-            // borders + 2 padding
-
-            let horizontal_offset = if app.cursor_position >= available_width {
-                app.cursor_position - available_width + 1
-            } else {
-                0
-            };
-
-            let visible_cursor_pos = app.cursor_position - horizontal_offset;
-
-            // cursor_x = left border + padding_left + local_pos
-            let cursor_x = search_area.x + 1 + padding_left + visible_cursor_pos as u16;
-            let cursor_y = search_area.y + 1;
-
-            let backend = terminal.backend_mut();
-
-            // Move cursor
-            backend.execute(MoveTo(cursor_x, cursor_y))?;
-
-            // Set shape based on blink interval
-            let style = if cfg.colors.cursor_blink_interval > 0 {
-                // Use steady cursor - we'll handle blinking manually
-                match cfg.colors.cursor_shape {
-                    CursorShape::Block => SetCursorStyle::SteadyBlock,
-                    CursorShape::Underline => SetCursorStyle::SteadyUnderScore,
-                    CursorShape::Pipe => SetCursorStyle::SteadyBar,
-                }
-            } else {
-                // Use terminal's built-in blinking
-                match cfg.colors.cursor_shape {
-                    CursorShape::Block => SetCursorStyle::BlinkingBlock,
-                    CursorShape::Underline => SetCursorStyle::BlinkingUnderScore,
-                    CursorShape::Pipe => SetCursorStyle::BlinkingBar,
-                }
-            };
-            backend.execute(style)?;
-
-            // Handle manual cursor blinking if interval is set
-            if cfg.colors.cursor_blink_interval > 0 {
-                if app.cursor_visible {
-                    terminal.show_cursor()?;
-                } else {
-                    terminal.hide_cursor()?;
-                }
-            } else {
-                terminal.show_cursor()?;
-            }
+        if app.cursor_visible && app.focus == Focus::Search {
+            app.text_area.set_cursor_style(cursor_style);
         } else {
-            terminal.hide_cursor()?;
+            app.text_area.set_cursor_style(Style::default()); // Hidden
         }
+
+        terminal.draw(|f| ui::draw(f, app, cfg.search_position.clone(), cfg))?;
+        
+        // Always hide hardware cursor as we use tui-textarea's visual cursor
+        terminal.hide_cursor()?;
 
         let tick = Duration::from_millis(50);
 

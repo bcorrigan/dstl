@@ -4,6 +4,7 @@ use std::time::Instant;
 use crate::config::DstlConfig;
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
+use tui_textarea::TextArea;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
@@ -28,8 +29,7 @@ pub struct App {
     pub mode: Mode,
     pub single_pane_mode: SinglePaneMode,
     pub should_quit: bool,
-    pub search_query: String,
-    pub cursor_position: usize,
+    pub text_area: TextArea<'static>,
     pub cursor_visible: bool,
     pub cursor_last_toggle: std::time::Instant,
     pub categories: Vec<String>,
@@ -49,8 +49,7 @@ impl Clone for App {
             mode: self.mode,
             single_pane_mode: self.single_pane_mode,
             should_quit: self.should_quit,
-            search_query: self.search_query.clone(),
-            cursor_position: self.cursor_position,
+            text_area: self.text_area.clone(),
             cursor_visible: true,
             cursor_last_toggle: Instant::now(),
             categories: self.categories.clone(),
@@ -72,8 +71,7 @@ impl std::fmt::Debug for App {
             .field("mode", &self.mode)
             .field("single_pane_mode", &self.single_pane_mode)
             .field("should_quit", &self.should_quit)
-            .field("search_query", &self.search_query)
-            .field("cursor_position", &self.cursor_position)
+            .field("text_area", &self.text_area)
             .field("cursor_visible", &self.cursor_visible)
             .field("cursor_last_toggle", &self.cursor_last_toggle)
             .field("categories", &self.categories)
@@ -127,8 +125,7 @@ impl App {
             mode,
             single_pane_mode,
             should_quit: false,
-            search_query: String::new(),
-            cursor_position: 0,
+            text_area: TextArea::default(),
             cursor_visible: true,
             cursor_last_toggle: Instant::now(),
             categories,
@@ -146,6 +143,11 @@ impl App {
         let _ = app.load_recent();
 
         app
+    }
+
+    /// Helper to get the current search query
+    pub fn query(&self) -> String {
+        self.text_area.lines().first().cloned().unwrap_or_default()
     }
 
     /// Add an app to the recent list
@@ -196,7 +198,8 @@ impl App {
     }
 
     pub fn visible_apps(&self) -> Vec<&AppEntry> {
-        let query = &self.search_query;
+        let query_string = self.query();
+        let query = &query_string;
 
         // Start with all apps
         let mut apps: Vec<&AppEntry> = if query.is_empty() {
@@ -211,7 +214,7 @@ impl App {
         };
 
         // If recent_first and not searching, reorder
-        if self.search_query.is_empty() && self.config.recent_first && !self.recent_apps.is_empty() {
+        if query.is_empty() && self.config.recent_first && !self.recent_apps.is_empty() {
             let mut recent_list = Vec::new();
             let mut seen = std::collections::HashSet::new();
 

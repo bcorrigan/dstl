@@ -5,9 +5,7 @@ use ratatui::Frame;
 
 pub fn draw(
     f: &mut Frame,
-    app: &App,
-    _search_query: &str,
-    _apps: &[String],
+    app: &mut App,
     selected: usize,
     focus: Focus,
     search_position: SearchPosition,
@@ -31,12 +29,11 @@ pub fn draw(
         config,
     );
     
-    // Pass cursor_position to render_search_bar
+    // Pass text_area to render_search_bar
     layout::render_search_bar(
         f,
         chunks.0,
-        &app.search_query,
-        app.cursor_position,
+        &mut app.text_area,
         focus,
         config,
     );
