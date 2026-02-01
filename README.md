@@ -1,30 +1,25 @@
-<h1 align="center">dstl</h1>
+<h1 align="center">dstl (Sway Fork)</h1>
 
-<p align="center"><b>Dustin's Simple TUI Launcher</b> - A fast, keyboard-driven application launcher for the terminal with fuzzy search and extensive theming support.</p>
+<p align="center"><b>Dustin's Simple TUI Launcher</b> - A fast, keyboard-driven application launcher for the terminal with fuzzy search and extensive theming support. This is a fork specialized for better Sway integration and a stateless, Emacs-friendly UX.</p>
 
-## Features
+## Fork Features
+
+- 🏢 **Sway Integration** - seamless execution via `swayexec` IPC (avoids process hierarchy issues) and smart fullscreen handling (un-fullscreens for launch, restores if cancelled)
+- ⌨️ **Stateless UX** - Typing always goes to search, arrow keys always navigate lists. No modes to switch focus.
+- 🎹 **Emacs Keybindings** - GNU Readline style shortcuts (`Ctrl-a`, `Ctrl-e`, `Ctrl-k`, `Ctrl-u`, etc.)
+- 🎨 **Enhanced Visuals** - Clear distinction between focused and unfocused lists in dual-pane mode via themable colors
+- 🚀 **Direct Execution** - Can print selection to stdout or execute directly
+
+## Features (Inherited)
 
 - 🚀 **Fast fuzzy search** - Quickly find applications as you type
 - 🎨 **Highly customizable** - Extensive theming with hex color support
 - 📱 **Dual view modes** - Switch between single-pane and dual-pane (category + apps) layouts
-- ⌨️ **Vim-style navigation** - hjkl movement plus arrow keys
 - 📋 **Recent apps tracking** - Quick access to frequently used applications
 - 🎯 **Smart cursor** - Full cursor control with blinking support
 - 🔧 **Flexible configuration** - Uses `.rune` config format with import/gather support
 
 ## Installation
-
-### AUR
-
-```sh
-paru -s dstl
-```
-
-or
-
-```sh
-yay -s dstl
-```
 
 ### From Source
 
@@ -49,7 +44,10 @@ dstl:
     dmenu = false
     startup_mode = "dual"  # or "single"
     search_position = "top"  # or "bottom"
-    focus_search_on_switch = true
+    
+    # Sway Integration
+    sway = true  # Enable Sway IPC integration
+    print_selection = false # Print selected command to stdout instead of launching
     
     # Terminal emulator for terminal apps
     terminal = "foot"
@@ -62,6 +60,7 @@ dstl:
     theme:
         border = "#ffffff"
         focus = "#00ff00"
+        unfocused = "#808080" # Color for selection in non-active pane
         highlight = "#0000ff"
         cursor_color = "#00ff00"  # defaults to focus color
         cursor_shape = "block"  # "block", "underline", or "pipe"
@@ -71,6 +70,14 @@ dstl:
     end
 end
 ```
+
+### Sway Support
+
+When `sway = true` (or `--sway` flag is used):
+1. Upon launch, checks if the current window is fullscreen.
+2. If fullscreen, disables it to show the launcher.
+3. If an app is launched, it executes via Sway IPC (`exec <cmd>`), preventing the new app from being a child of the launcher/terminal.
+4. If cancelled (`Esc` or `Ctrl-g`), restores the original window's fullscreen state.
 
 ### Theme System with Gather
 
@@ -111,35 +118,40 @@ Colors support multiple hex formats:
 ```bash
 # Launch directly
 dstl
+
+# Launch with Sway integration override
+dstl --sway
 ```
 
-# Launch from config (hyprland example)
+# Launch from config (hyprland/sway example)
 ```
-bind = $mainMod, R, exec, kitty --class dstl -e dstl
+bindsym $mod+d exec foot --app-id dstl -e dstl --sway
 ```
 
 ### Keyboard Shortcuts
 
-#### Navigation
-- `j` / `↓` - Move down
-- `k` / `↑` - Move up
-- `h` / `←` - Move left (categories in dual-pane, or prev app in single-pane)
-- `l` / `→` - Move right (apps in dual-pane, or next app in single-pane)
-- `Tab` - Cycle focus (Search → Categories → Apps → Search)
-
-#### Search
-- `Type` - Search for applications (fuzzy matching)
-- `Backspace` - Delete character before cursor
-- `Delete` - Delete character at cursor
-- `←` / `→` - Move cursor within search query
-- `Home` - Jump to start of search query
-- `End` - Jump to end of search query
-
-#### Actions
+#### Global
+- `Tab` / `Ctrl-t` - Toggle between single-pane and dual-pane mode
+- `Ctrl-g` / `Esc` - Quit without launching
 - `Enter` - Launch selected application
-- `m` - Toggle between single-pane and dual-pane mode
-- `q` - Quit (when not in search bar)
-- `Esc` - Quit
+
+#### Navigation (Always Active)
+- `↓` - Move down in list
+- `↑` - Move up in list
+- `←` - Move left (to Categories pane in dual-mode)
+- `→` - Move right (to Apps pane in dual-mode)
+
+#### Text Editing (Emacs Style)
+- `Type` - Always goes to search bar
+- `Ctrl-a` / `Home` - Jump to start
+- `Ctrl-e` / `End` - Jump to end
+- `Ctrl-b` - Back one char
+- `Ctrl-f` - Forward one char
+- `Ctrl-w` - Delete previous word
+- `Ctrl-u` - Delete to start of line
+- `Ctrl-k` - Delete to end of line
+- `Ctrl-d` / `Delete` - Delete next char
+- `Ctrl-h` / `Backspace` - Delete previous char
 
 ## View Modes
 
@@ -151,15 +163,17 @@ Shows all applications in one list with fuzzy search filtering across all catego
 - **Right pane**: Applications in selected category
 - Search filters both panes simultaneously
 - Special "Recent" category shows recently launched apps
+- The currently active list (navigable by arrow keys) is highlighted with the `focus` color. The inactive list selection uses the `unfocused` color.
 
 ## Advanced Configuration
 
 ### Key Settings Explained
 
 - **`dmenu`**: Enable dmenu-like behavior (boolean)
+- **`sway`**: Enable Sway IPC integration (boolean)
+- **`print_selection`**: Print command to stdout instead of executing (boolean)
 - **`search_position`**: Place search bar at `"top"` or `"bottom"`
 - **`startup_mode`**: Start in `"single"` or `"dual"` pane mode
-- **`focus_search_on_switch`**: Auto-focus search when switching modes
 - **`timeout`**: Auto-close timeout in milliseconds (0 to disable)
 - **`max_recent_apps`**: Maximum number of recent apps to track
 - **`recent_first`**: Show recent apps category first

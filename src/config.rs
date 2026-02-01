@@ -49,6 +49,8 @@ pub struct DstlConfig {
     pub timeout: u64,
     pub max_recent_apps: usize,
     pub recent_first: bool,
+    pub print_selection: bool,
+    pub sway: bool,
 }
 
 impl LauncherTheme {
@@ -143,6 +145,8 @@ fn extract_dstl_config(config: RuneConfig) -> Result<DstlConfig> {
     let timeout = get_config_or(&config, "dstl.timeout", 0u64);
     let max_recent_apps: usize = get_config_or(&config, "dstl.max_recent_apps", 15u64) as usize;
     let recent_first = get_config_or(&config, "dstl.recent_first", false);
+    let print_selection = get_config_or(&config, "dstl.print_selection", false);
+    let sway = get_config_or(&config, "dstl.sway", false);
 
     // Validate search_position
     let search_position_str: String = get_config_or(&config, "dstl.search_position", "top".to_string());
@@ -198,6 +202,8 @@ fn extract_dstl_config(config: RuneConfig) -> Result<DstlConfig> {
         timeout,
         max_recent_apps,
         recent_first,
+        print_selection,
+        sway,
     })
 }
 

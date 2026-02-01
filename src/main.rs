@@ -44,8 +44,8 @@ fn main() -> Result<()> {
 
     let mut app = App::new(single_pane_mode, start_mode, &cfg);
 
-    let print_only = std::env::args().any(|arg| arg == "--print-selection");
-    let sway_mode = std::env::args().any(|arg| arg == "--sway");
+    let print_only = cfg.print_selection || std::env::args().any(|arg| arg == "--print-selection");
+    let sway_mode = cfg.sway || std::env::args().any(|arg| arg == "--sway");
     
     let mut sway_client = if sway_mode {
         sway::Client::connect().ok()

@@ -15,6 +15,10 @@ dstl:
     startup_mode = "single"
     # Automatically refocus search field when switching modes
     focus_search_on_switch = true
+    # Enable Sway IPC integration (fullscreen handling, direct execution)
+    sway = false
+    # Print command to stdout instead of executing (useful for piping)
+    print_selection = false
     # Terminal emulator to launch apps that need a terminal
     terminal = "alacritty"
     # Close the process after configured timeout (in seconds)
@@ -28,6 +32,8 @@ dstl:
         border = "#ffffff"
         # Highlight color for focused elements (hex format: #RRGGBB)
         focus = "#ffff00"
+        # Color used for selection bar in the inactive/unfocused pane
+        unfocused = "#808080"
         # Color used when highlighting matched entries (hex format: #RRGGBB)
         highlight = "#0000ff"
         # Border style ("plain", "rounded", "thick", "double")
