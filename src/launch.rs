@@ -68,6 +68,7 @@ mod tests {
             colors: LauncherTheme {
                 border: "".to_string(),
                 focus: "".to_string(),
+                unfocused: "".to_string(),
                 highlight: "".to_string(),
                 border_style: "".to_string(),
                 highlight_type: "".to_string(),
@@ -79,6 +80,8 @@ mod tests {
             timeout: 0,
             max_recent_apps: 0,
             recent_first: false,
+            print_selection: false,
+            sway: false,
         }
     }
 
