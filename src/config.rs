@@ -29,6 +29,7 @@ pub enum CursorShape {
 pub struct LauncherTheme {
     pub border: String,
     pub focus: String,
+    pub unfocused: String,
     pub highlight: String,
     pub border_style: String,
     pub highlight_type: String,
@@ -160,7 +161,7 @@ fn extract_dstl_config(config: RuneConfig) -> Result<DstlConfig> {
     };
 
     // Load colors with theme priority system
-    let (border_color, focus_color, highlight_color, cursor_color) = load_theme_colors(&config)?;
+    let (border_color, focus_color, unfocused_color, highlight_color, cursor_color) = load_theme_colors(&config)?;
 
     let cursor_shape_str: String = get_config_or(&config, "dstl.theme.cursor_shape", "block".to_string());
     let cursor_shape = match cursor_shape_str.to_lowercase().as_str() {
@@ -178,6 +179,7 @@ fn extract_dstl_config(config: RuneConfig) -> Result<DstlConfig> {
     let colors = LauncherTheme {
         border: border_color,
         focus: focus_color,
+        unfocused: unfocused_color,
         highlight: highlight_color,
         border_style,
         highlight_type,
@@ -200,9 +202,10 @@ fn extract_dstl_config(config: RuneConfig) -> Result<DstlConfig> {
 }
 
 /// Load theme colors with priority system similar to claw
-fn load_theme_colors(config: &RuneConfig) -> Result<(String, String, String, String)> {
+fn load_theme_colors(config: &RuneConfig) -> Result<(String, String, String, String, String)> {
     let mut border = None;
     let mut focus = None;
+    let mut unfocused = None;
     let mut highlight = None;
     let mut cursor = None;
 
@@ -215,6 +218,7 @@ fn load_theme_colors(config: &RuneConfig) -> Result<(String, String, String, Str
             if let Ok(val) = config.get::<String>(&test_path) {
                 border = Some(val);
                 focus = config.get::<String>(&format!("{}.dstl.theme.focus", alias)).ok();
+                unfocused = config.get::<String>(&format!("{}.dstl.theme.unfocused", alias)).ok();
                 highlight = config.get::<String>(&format!("{}.dstl.theme.highlight", alias)).ok();
                 cursor = config.get::<String>(&format!("{}.dstl.theme.cursor_color", alias)).ok();
                 break;
@@ -226,6 +230,7 @@ fn load_theme_colors(config: &RuneConfig) -> Result<(String, String, String, Str
     if border.is_none() {
         border = config.get::<String>("dstl.theme.border").ok();
         focus = config.get::<String>("dstl.theme.focus").ok();
+        unfocused = config.get::<String>("dstl.theme.unfocused").ok();
         highlight = config.get::<String>("dstl.theme.highlight").ok();
         cursor = config.get::<String>("dstl.theme.cursor_color").ok();
     }
@@ -234,6 +239,7 @@ fn load_theme_colors(config: &RuneConfig) -> Result<(String, String, String, Str
     if border.is_none() && config.has_document("theme") {
         border = config.get::<String>("theme.dstl.theme.border").ok();
         focus = config.get::<String>("theme.dstl.theme.focus").ok();
+        unfocused = config.get::<String>("theme.dstl.theme.unfocused").ok();
         highlight = config.get::<String>("theme.dstl.theme.highlight").ok();
         cursor = config.get::<String>("theme.dstl.theme.cursor_color").ok();
     }
@@ -241,10 +247,11 @@ fn load_theme_colors(config: &RuneConfig) -> Result<(String, String, String, Str
     // Defaults
     let border = border.unwrap_or_else(|| "#ffffff".to_string());
     let focus = focus.unwrap_or_else(|| "#00ff00".to_string());
+    let unfocused = unfocused.unwrap_or_else(|| "#808080".to_string());
     let highlight = highlight.unwrap_or_else(|| "#0000ff".to_string());
     let cursor = cursor.unwrap_or_else(|| focus.clone());
 
-    Ok((border, focus, highlight, cursor))
+    Ok((border, focus, unfocused, highlight, cursor))
 }
 
 /// Top-level config loader that exits gracefully on failure.

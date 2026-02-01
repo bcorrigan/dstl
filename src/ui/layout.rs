@@ -124,10 +124,15 @@ pub fn render_list(
         .map(|a| ListItem::new(format!(" {} ", a)))
         .collect();
     
-    let highlight_color = LauncherTheme::parse_color(&config.colors.highlight);
+    let selection_color = if focus_on_title {
+        LauncherTheme::parse_color(&config.colors.highlight)
+    } else {
+        LauncherTheme::parse_color(&config.colors.unfocused)
+    };
+
     let highlight_style = match config.colors.highlight_type.to_lowercase().as_str() {
-        "foreground" => Style::default().fg(highlight_color),
-        "background" | _ => Style::default().bg(highlight_color).fg(Color::Black),
+        "foreground" => Style::default().fg(selection_color),
+        "background" | _ => Style::default().bg(selection_color).fg(Color::Black),
     };
     
     let list = List::new(list_items)
