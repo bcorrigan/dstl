@@ -165,7 +165,7 @@ Shows all applications in one list with fuzzy search filtering across all catego
 - Special "Recent" category shows recently launched apps
 - The currently active list (navigable by arrow keys) is highlighted with the `focus` color. The inactive list selection uses the `unfocused` color.
 
-## Advanced Configuration
+### Advanced Configuration
 
 ### Key Settings Explained
 
@@ -177,6 +177,10 @@ Shows all applications in one list with fuzzy search filtering across all catego
 - **`timeout`**: Auto-close timeout in milliseconds (0 to disable)
 - **`max_recent_apps`**: Maximum number of recent apps to track
 - **`recent_first`**: Show recent apps category first
+- **`terminal`**: The command used to wrap CLI-based applications.
+  - If a single word (e.g., `"alacritty"`), `dstl` automatically appends `-e` before the application command.
+  - If multiple words (e.g., `"wezterm start"` or `"foot --app-id launcher"`), `dstl` appends the application command directly. This allows using specific terminal subcommands or existing processes.
+  - **Example**: `terminal = "wezterm start"` results in `wezterm start helix` being executed.
 
 ### Cursor Customization
 
