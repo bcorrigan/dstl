@@ -17,6 +17,13 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
             }
             return Ok(false);
         }
+        KeyCode::Char('t') if key.modifiers == KeyModifiers::CONTROL => {
+            app.toggle_mode();
+            if app.config.focus_search_on_switch {
+                app.focus = Focus::Search;
+            }
+            return Ok(false);
+        }
         _ => {}
     }
 
