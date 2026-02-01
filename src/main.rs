@@ -229,7 +229,10 @@ fn run_app<B: Backend + ExecutableCommand>(
     terminal: &mut Terminal<B>,
     app: &mut App,
     cfg: &config::DstlConfig,
-) -> Result<()> {
+) -> Result<()>
+where
+    <B as Backend>::Error: Send + Sync + 'static,
+{
     let mut last_input = Instant::now();
 
     loop {
@@ -291,7 +294,10 @@ fn warmup_icons<B: Backend>(
     terminal: &mut Terminal<B>,
     app: &App,
     cfg: &config::DstlConfig,
-) -> Result<()> {
+) -> Result<()>
+where
+    <B as Backend>::Error: Send + Sync + 'static,
+{
     if app.categories.is_empty() {
         return Ok(());
     }
