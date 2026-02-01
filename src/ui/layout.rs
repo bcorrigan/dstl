@@ -87,12 +87,10 @@ pub fn render_search_bar(
     
     f.render_widget(paragraph, area);
     
-    // Set cursor position if search is focused (account for padding)
-    if focus == Focus::Search {
-        let cursor_x = inner.x + padding as u16 + (cursor_position - scroll_offset) as u16;
-        let cursor_y = inner.y;
-        f.set_cursor_position((cursor_x, cursor_y));
-    }
+    // Always set cursor position (input is always active)
+    let cursor_x = inner.x + padding as u16 + (cursor_position - scroll_offset) as u16;
+    let cursor_y = inner.y;
+    f.set_cursor_position((cursor_x, cursor_y));
 }
 
 

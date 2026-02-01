@@ -113,11 +113,11 @@ impl App {
         let (categories, apps, mode, focus) = match start_mode {
             Mode::SinglePane => {
                 let (cats, apps) = Self::load_for_mode(single_pane_mode);
-                (cats, apps, Mode::SinglePane, Focus::Search)
+                (cats, apps, Mode::SinglePane, Focus::Apps)
             }
             Mode::DualPane => {
                 let (cats, apps) = Self::load_desktop_apps();
-                (cats, apps, Mode::DualPane, Focus::Search)
+                (cats, apps, Mode::DualPane, Focus::Categories)
             }
         };
 
