@@ -19,7 +19,11 @@ use ratatui::{
     backend::{Backend, CrosstermBackend},
 };
 use std::{
-    io::{self, Write},
+    fs,
+    io::{self, Read, Write},
+    os::unix::net::{UnixListener, UnixStream},
+    sync::mpsc::{channel, Receiver},
+    thread,
     time::{Duration, Instant},
 };
 
@@ -28,6 +32,45 @@ use config::{CursorShape, load_launcher_config};
 
 fn main() -> Result<()> {
     color_eyre::install()?;
+
+    let socket_path = "/tmp/dstl.sock";
+
+    // Try to connect to existing instance
+    match UnixStream::connect(socket_path) {
+        Ok(mut stream) => {
+            stream.write_all(b"quit")?;
+            return Ok(());
+        }
+        Err(e) if e.kind() == io::ErrorKind::ConnectionRefused => {
+            // Socket exists but no listener - stale socket
+            let _ = fs::remove_file(socket_path);
+        }
+        Err(_) => {
+            // Assume doesn't exist or other error we can try to recover from by binding
+        }
+    }
+
+    // Setup listener
+    let (tx, rx) = channel();
+    let listener = UnixListener::bind(socket_path)?;
+    
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            match stream {
+                Ok(mut stream) => {
+                    let _ = stream.set_read_timeout(Some(Duration::from_millis(100)));
+                    let mut buf = String::new();
+                    if let Ok(_) = stream.read_to_string(&mut buf) {
+                        if buf == "quit" {
+                            let _ = tx.send(());
+                            break;
+                        }
+                    }
+                }
+                Err(_) => continue,
+            }
+        }
+    });
 
     let cfg = load_launcher_config();
 
@@ -64,12 +107,15 @@ fn main() -> Result<()> {
     enable_raw_mode()?;
 
     let res = if print_only {
-        run_with_writer(io::stderr(), &mut app, &cfg)
+        run_with_writer(io::stderr(), &mut app, &cfg, &rx)
     } else {
-        run_with_writer(io::stdout(), &mut app, &cfg)
+        run_with_writer(io::stdout(), &mut app, &cfg, &rx)
     };
 
     disable_raw_mode()?;
+
+    // Cleanup socket
+    let _ = fs::remove_file(socket_path);
 
     if let Err(err) = res {
         eprintln!("Error: {err:?}");
@@ -140,6 +186,7 @@ fn run_with_writer<W: Write + ExecutableCommand>(
     mut writer: W,
     app: &mut App,
     cfg: &config::DstlConfig,
+    rx: &Receiver<()>,
 ) -> Result<()> {
     set_cursor_color(&mut writer, &cfg.colors.cursor_color)?;
 
@@ -156,7 +203,7 @@ fn run_with_writer<W: Write + ExecutableCommand>(
         app.focus = old_focus;
     }
 
-    let res = run_app(&mut terminal, app, cfg);
+    let res = run_app(&mut terminal, app, cfg, rx);
 
     execute!(
         terminal.backend_mut(),
@@ -229,6 +276,7 @@ fn run_app<B: Backend + ExecutableCommand>(
     terminal: &mut Terminal<B>,
     app: &mut App,
     cfg: &config::DstlConfig,
+    rx: &Receiver<()>,
 ) -> Result<()>
 where
     <B as Backend>::Error: Send + Sync + 'static,
@@ -236,6 +284,11 @@ where
     let mut last_input = Instant::now();
 
     loop {
+        // Check for quit signal from socket
+        if rx.try_recv().is_ok() {
+            return Ok(());
+        }
+
         app.update_cursor_blink();
 
         terminal.draw(|f| ui::draw(f, app, cfg.search_position.clone(), cfg))?;

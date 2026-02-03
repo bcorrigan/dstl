@@ -291,6 +291,23 @@ impl App {
         self.selected_app = 0;
     }
 
+    /// Toggle dmenu mode (PATH executables) vs Desktop Apps (SinglePane)
+    pub fn toggle_dmenu_mode(&mut self) {
+        self.single_pane_mode = match self.single_pane_mode {
+            SinglePaneMode::Dmenu => SinglePaneMode::DesktopApps,
+            SinglePaneMode::DesktopApps => SinglePaneMode::Dmenu,
+        };
+
+        // Always switch to SinglePane to show the new list
+        self.mode = Mode::SinglePane;
+        let (categories, apps) = Self::load_for_mode(self.single_pane_mode);
+        self.categories = categories;
+        self.apps = apps;
+        self.selected_app = 0;
+        self.selected_category = 0;
+        self.focus = Focus::Apps;
+    }
+
     /// Check if an app matches the search query using fuzzy matching (case-insensitive)
     pub fn matches_search(&self, app_name: &str, query: &str) -> Option<i64> {
         if query.is_empty() {
@@ -551,17 +568,19 @@ impl App {
     /// Load executables from a directory (dmenu style)
     fn load_from_path<P: AsRef<Path>>(path: P) -> (Vec<String>, Vec<AppEntry>) {
         let mut apps = Vec::new();
+        let gui_bins = Self::get_known_gui_binaries();
 
         if let Ok(entries) = fs::read_dir(path) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.is_file() {
                     if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                        let is_gui = gui_bins.contains(name);
                         apps.push(AppEntry {
                             name: name.to_string(),
                             category: "CLI".to_string(),
                             exec: name.to_string(),
-                            terminal: true,
+                            terminal: !is_gui,
                         });
                     }
                 }
@@ -570,5 +589,62 @@ impl App {
 
         // Dmenu-style uses CLI category for consistency
         (vec!["CLI".to_string()], apps)
+    }
+
+    /// Scan desktop files to find binaries that are GUI applications (Terminal=false)
+    fn get_known_gui_binaries() -> std::collections::HashSet<String> {
+        use std::collections::HashSet;
+        let mut gui_bins = HashSet::new();
+        let home = std::env::var("HOME").unwrap_or_else(|_| String::from("/home"));
+        let local_dir = format!("{}/.local/share/applications", home);
+        let paths = vec![local_dir, "/usr/share/applications".to_string()];
+
+        for dir in paths {
+            if let Ok(entries) = fs::read_dir(&dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().and_then(|s| s.to_str()) != Some("desktop") {
+                        continue;
+                    }
+                    if let Ok(content) = fs::read_to_string(&path) {
+                        let mut exec = None;
+                        let mut terminal = false;
+                        let mut in_desktop_entry = false;
+                        
+                        for line in content.lines() {
+                            let line = line.trim();
+                            if line.starts_with('[') {
+                                in_desktop_entry = line == "[Desktop Entry]";
+                                continue;
+                            }
+                            if !in_desktop_entry { continue; }
+                            
+                            if let Some((key, value)) = line.split_once('=') {
+                                let key = key.trim();
+                                let value = value.trim();
+                                match key {
+                                    "Exec" => exec = Some(value.to_string()),
+                                    "Terminal" => terminal = value == "true",
+                                    _ => {}
+                                }
+                            }
+                        }
+                        
+                        if let Some(exec_str) = exec {
+                            if !terminal {
+                                let clean = Self::clean_exec(&exec_str);
+                                if let Some(bin) = clean.split_whitespace().next() {
+                                    let bin_path = Path::new(bin);
+                                    if let Some(name) = bin_path.file_name().and_then(|s| s.to_str()) {
+                                        gui_bins.insert(name.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        gui_bins
     }
 }

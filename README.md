@@ -5,6 +5,7 @@
 ## Fork Features
 
 - 🏢 **Sway Integration** - seamless execution via `swayexec` IPC (avoids process hierarchy issues) and smart fullscreen handling (un-fullscreens for launch, restores if cancelled)
+- 🔄 **Toggleable Launcher** - Automatically detects if another instance is running and sends a quit signal, allowing you to bind a single key to both open and close the launcher.
 - ⌨️ **Stateless UX** - Typing always goes to search, arrow keys always navigate lists. No modes to switch focus.
 - 🎹 **Emacs Keybindings** - GNU Readline style shortcuts (`Ctrl-a`, `Ctrl-e`, `Ctrl-k`, `Ctrl-u`, etc.)
 - 🎨 **Enhanced Visuals** - Clear distinction between focused and unfocused lists in dual-pane mode via themable colors
@@ -79,52 +80,18 @@ When `sway = true` (or `--sway` flag is used):
 3. If an app is launched, it executes via Sway IPC (`exec <cmd>`), preventing the new app from being a child of the launcher/terminal.
 4. If cancelled (`Esc` or `Ctrl-g`), restores the original window's fullscreen state.
 
-### Theme System with Gather
+### Toggle Behavior
 
-dstl supports importing themes using the `gather` statement:
+`dstl` uses a Unix socket at `/tmp/dstl.sock` to manage instances:
+1. On startup, it checks if the socket exists.
+2. If another instance is already running, it sends a "quit" signal to that instance and exits immediately.
+3. If no other instance is found, it creates the socket and starts as the primary launcher.
 
-```rune
-# Import a theme file
-gather "~/.config/dstl/themes/dracula.rune" as theme
-
-dstl:
-    terminal = "alacritty"
-    # Theme colors will be loaded from the gathered file
-    theme:
-      cursor_shape = "block"
-      cursor_blink_interval = 500
-      border_style = "plain"
-      highlight_type = "background"
-    end
-end
-```
-
-**Theme Priority:**
-1. Aliased gather imports (e.g., `gather "theme.rune" as mytheme`)
-2. Top-level theme in main config or non-aliased gather
-3. Document named "theme"
-4. Built-in defaults
-
-### Color Format
-
-Colors support multiple hex formats:
-- `#RGB` - 3-digit hex (e.g., `#fff`)
-- `#RRGGBB` - 6-digit hex (e.g., `#ffffff`)
-
-## Usage
-
-### Launching
-
-```bash
-# Launch directly
-dstl
-
-# Launch with Sway integration override
-dstl --sway
-```
+This allows you to use the same keybinding to toggle the launcher on and off.
 
 # Launch from config (hyprland/sway example)
 ```
+# Press $mod+d once to open, press again to close
 bindsym $mod+d exec foot --app-id dstl -e dstl --sway
 ```
 

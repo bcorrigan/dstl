@@ -20,6 +20,10 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> Result<bool> {
             app.toggle_mode();
             return Ok(false);
         }
+        KeyCode::Char('x') if key.modifiers == KeyModifiers::CONTROL => {
+            app.toggle_dmenu_mode();
+            return Ok(false);
+        }
         KeyCode::Tab => {
             app.toggle_mode();
             return Ok(false);
